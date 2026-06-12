@@ -5,19 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Shruti2030: Open-source PDF to audio reader optimized for scientific papers with auto-advance, clean mode, and AI voices.">
   <meta name="theme-color" content="#1a3a52">
-  <meta name="author" content="Shruti2030 Contributors">
   
-  <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%231a3a52' width='180' height='180'/><text x='50%' y='50%' font-size='100' font-weight='bold' fill='white' text-anchor='middle' dy='.3em'>🎧</text></svg>">
-  
-  <!-- Stylesheets -->
-  <link rel="stylesheet" href="styles_v2.css">
+  <link rel="stylesheet" href="styles.css">
   
   <title>Shruti2030 - PDF to Audio Reader</title>
   
   <style>
-    /* Loading state */
     #root {
       display: flex;
       align-items: center;
@@ -54,45 +48,451 @@
     </div>
   </div>
 
-  <!-- PDF.js Library -->
+  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   
   <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   
-  <!-- Babel for JSX transformation -->
+  <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <!-- App -->
-  <script type="text/babel" src="app_v2.jsx"></script>
-  
-  <!-- Service Worker Registration -->
+
+  <!-- App Script -->
+  <script type="text/babel">
+    // ===== PDF AUDIO READER APP =====
+    const PDFAudioReader = () => {
+      // State Management
+      const [pdf, setPdf] = React.useState(null);
+      const [pages, setPages] = React.useState([]);
+      const [currentPage, setCurrentPage] = React.useState(0);
+      const [currentText, setCurrentText] = React.useState('');
+      const [isPlaying, setIsPlaying] = React.useState(false);
+      const [voices, setVoices] = React.useState([]);
+      const [selectedVoice, setSelectedVoice] = React.useState(0);
+      const [speed, setSpeed] = React.useState(1);
+      const [savedProgress, setSavedProgress] = React.useState({});
+      const [pdfName, setPdfName] = React.useState('No PDF loaded');
+      const [darkMode, setDarkMode] = React.useState(() => localStorage.getItem('shruti_darkMode') === 'true');
+      const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768);
+      const [visualization, setVisualization] = React.useState(Array(20).fill(0));
+      
+      // NEW FEATURES
+      const [autoAdvance, setAutoAdvance] = React.useState(() => localStorage.getItem('shruti_autoAdvance') === 'true');
+      const [cleanMode, setCleanMode] = React.useState(() => localStorage.getItem('shruti_cleanMode') === 'true');
+      const [piperVoices, setPiperVoices] = React.useState([]);
+      
+      // Refs
+      const synthRef = React.useRef(null);
+      const fileInputRef = React.useRef(null);
+      const visualizationIntervalRef = React.useRef(null);
+
+      // Initialize
+      React.useEffect(() => {
+        synthRef.current = window.speechSynthesis;
+        const synth = window.speechSynthesis;
+        const updateVoices = () => setVoices(synth.getVoices());
+        synth.onvoiceschanged = updateVoices;
+        updateVoices();
+      }, []);
+
+      // Dark mode
+      React.useEffect(() => {
+        localStorage.setItem('shruti_darkMode', darkMode);
+        if (darkMode) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+      }, [darkMode]);
+
+      // Auto-advance
+      React.useEffect(() => {
+        localStorage.setItem('shruti_autoAdvance', autoAdvance);
+      }, [autoAdvance]);
+
+      // Clean mode
+      React.useEffect(() => {
+        localStorage.setItem('shruti_cleanMode', cleanMode);
+      }, [cleanMode]);
+
+      // Mobile detection
+      React.useEffect(() => {
+        const handleResize = () => {
+          setIsMobile(window.innerWidth < 768);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+      }, []);
+
+      // Visualization
+      React.useEffect(() => {
+        if (isPlaying) {
+          visualizationIntervalRef.current = setInterval(() => {
+            setVisualization(prev => prev.map(() => Math.random() * 100));
+          }, 100);
+        } else {
+          if (visualizationIntervalRef.current) clearInterval(visualizationIntervalRef.current);
+          setVisualization(Array(20).fill(0));
+        }
+        return () => {
+          if (visualizationIntervalRef.current) clearInterval(visualizationIntervalRef.current);
+        };
+      }, [isPlaying]);
+
+      // PDF Upload
+      const handlePdfUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setPdfName(file.name);
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const pdfjsLib = window.pdfjsLib;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          
+          try {
+            const pdf = await pdfjsLib.getDocument(new Uint8Array(event.target.result)).promise;
+            setPdf(pdf);
+            await extractPages(pdf);
+            setCurrentPage(0);
+            
+            const progress = JSON.parse(localStorage.getItem(`pdf_${file.name}`) || '{}');
+            setSavedProgress(progress);
+            if (progress.currentPage) {
+              setCurrentPage(progress.currentPage);
+            }
+          } catch (err) {
+            alert('Error loading PDF');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      const extractPages = async (pdfDoc) => {
+        const extractedPages = [];
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
+          const text = await page.getTextContent();
+          const fullText = text.items.map(item => item.str).join(' ');
+          extractedPages.push({
+            number: i,
+            text: fullText.trim(),
+            content: text.items
+          });
+        }
+        setPages(extractedPages);
+      };
+
+      // Speech
+      const speak = (text) => {
+        if (!synthRef.current) return;
+        
+        synthRef.current.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.voice = voices[selectedVoice] || voices[0];
+        utterance.rate = speed;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        utterance.onstart = () => setIsPlaying(true);
+        utterance.onend = () => {
+          setIsPlaying(false);
+          // AUTO-ADVANCE
+          if (autoAdvance && currentPage < pages.length - 1) {
+            setTimeout(() => {
+              const nextPage = currentPage + 1;
+              setCurrentPage(nextPage);
+              saveProgress(nextPage);
+              setTimeout(() => {
+                if (pages[nextPage]) {
+                  setCurrentText(pages[nextPage].text);
+                  speak(pages[nextPage].text);
+                }
+              }, 500);
+            }, 300);
+          }
+        };
+        utterance.onerror = () => setIsPlaying(false);
+
+        synthRef.current.speak(utterance);
+      };
+
+      const handlePlayPage = () => {
+        if (pages[currentPage]) {
+          setCurrentText(pages[currentPage].text);
+          speak(pages[currentPage].text);
+        }
+      };
+
+      const handlePause = () => {
+        if (synthRef.current) {
+          synthRef.current.pause();
+          setIsPlaying(false);
+        }
+      };
+
+      const handleResume = () => {
+        if (synthRef.current) {
+          synthRef.current.resume();
+          setIsPlaying(true);
+        }
+      };
+
+      const handleStop = () => {
+        if (synthRef.current) {
+          synthRef.current.cancel();
+          setIsPlaying(false);
+          setCurrentText('');
+        }
+      };
+
+      const nextPage = () => {
+        handleStop();
+        const next = Math.min(currentPage + 1, pages.length - 1);
+        setCurrentPage(next);
+        saveProgress(next);
+      };
+
+      const prevPage = () => {
+        handleStop();
+        const prev = Math.max(currentPage - 1, 0);
+        setCurrentPage(prev);
+        saveProgress(prev);
+      };
+
+      const saveProgress = (page) => {
+        const progress = { currentPage: page, timestamp: new Date().toISOString() };
+        localStorage.setItem(`pdf_${pdfName}`, JSON.stringify(progress));
+        setSavedProgress(progress);
+      };
+
+      const goToPage = (page) => {
+        handleStop();
+        setCurrentPage(page - 1);
+        saveProgress(page - 1);
+      };
+
+      const currentPageData = pages[currentPage];
+
+      return (
+        <div className="app-container">
+          <header className="header">
+            <div className="header-content">
+              <div className="header-top">
+                <h1>🎧 Shruti2030</h1>
+                <button 
+                  className="dark-mode-toggle"
+                  onClick={() => setDarkMode(!darkMode)}
+                  title={darkMode ? 'Light mode' : 'Dark mode'}
+                >
+                  {darkMode ? '☀️' : '🌙'}
+                </button>
+              </div>
+              <p className="tagline">PDF to Audio • Auto-Advance • Clean Reading • AI Voices</p>
+            </div>
+          </header>
+
+          <div className="main-grid">
+            <aside className="sidebar">
+              <div className="sidebar-section">
+                <h3>📄 Upload PDF</h3>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  onChange={handlePdfUpload}
+                  className="file-input"
+                />
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn btn-primary"
+                >
+                  Choose PDF
+                </button>
+                <p className="file-name" title={pdfName}>{pdfName}</p>
+              </div>
+
+              {pages.length > 0 && (
+                <>
+                  <div className="sidebar-section">
+                    <h3>📍 Navigation</h3>
+                    <div className="page-info">
+                      Page <strong>{currentPage + 1}</strong> / <strong>{pages.length}</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max={pages.length}
+                      value={currentPage + 1}
+                      onChange={(e) => goToPage(parseInt(e.target.value))}
+                      className="page-slider"
+                    />
+                    <div className="button-group">
+                      <button onClick={prevPage} className="btn btn-small">← Prev</button>
+                      <button onClick={nextPage} className="btn btn-small">Next →</button>
+                    </div>
+                  </div>
+
+                  <div className="sidebar-section">
+                    <h3>🎤 Voice</h3>
+                    <select
+                      value={selectedVoice}
+                      onChange={(e) => setSelectedVoice(parseInt(e.target.value))}
+                      className="voice-select"
+                    >
+                      {voices.map((voice, idx) => (
+                        <option key={idx} value={idx}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sidebar-section">
+                    <h3>⚡ Speed</h3>
+                    <div className="speed-control">
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2"
+                        step="0.1"
+                        value={speed}
+                        onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                        className="speed-slider"
+                      />
+                      <span className="speed-value">{speed.toFixed(1)}x</span>
+                    </div>
+                  </div>
+
+                  <div className="sidebar-section">
+                    <h3>⚙️ Settings</h3>
+                    
+                    <label className="toggle-option">
+                      <input 
+                        type="checkbox" 
+                        checked={autoAdvance}
+                        onChange={(e) => setAutoAdvance(e.target.checked)}
+                      />
+                      <span>⏭️ Auto-advance pages</span>
+                    </label>
+
+                    <label className="toggle-option">
+                      <input 
+                        type="checkbox" 
+                        checked={cleanMode}
+                        onChange={(e) => setCleanMode(e.target.checked)}
+                      />
+                      <span>✨ Clean reading mode</span>
+                    </label>
+                  </div>
+
+                  {savedProgress.timestamp && (
+                    <div className="sidebar-section progress-info">
+                      <p>📍 Last read: {new Date(savedProgress.timestamp).toLocaleDateString()}</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </aside>
+
+            <main className="content">
+              {!pages.length ? (
+                <div className="empty-state">
+                  <div className="empty-icon">📚</div>
+                  <h2>Ready to listen</h2>
+                  <p>Upload a PDF to get started. Shruti2030 will extract the text and read it aloud with natural voices.</p>
+                </div>
+              ) : (
+                <>
+                  {!cleanMode && (
+                    <div className="page-header">
+                      <h2>Page {currentPage + 1}</h2>
+                      <div className="page-indicator">{currentPage + 1} / {pages.length}</div>
+                    </div>
+                  )}
+
+                  {isPlaying && (
+                    <div className="visualization-container">
+                      <div className="waveform">
+                        {visualization.map((height, idx) => (
+                          <div 
+                            key={idx} 
+                            className="bar"
+                            style={{ height: `${height}%` }}
+                          />
+                        ))}
+                      </div>
+                      <p className="reading-status">🔊 Reading aloud...</p>
+                      {autoAdvance && <p className="auto-advance-status">⏭️ Auto-advance enabled</p>}
+                    </div>
+                  )}
+
+                  <div className="text-display">
+                    <p>{currentPageData?.text}</p>
+                  </div>
+
+                  <div className="controls">
+                    <button
+                      onClick={handlePlayPage}
+                      disabled={isPlaying}
+                      className="btn btn-play"
+                    >
+                      ▶ Play Page
+                    </button>
+                    <button
+                      onClick={handlePause}
+                      disabled={!isPlaying}
+                      className="btn btn-control"
+                    >
+                      ⏸ Pause
+                    </button>
+                    <button
+                      onClick={handleResume}
+                      disabled={!isPlaying}
+                      className="btn btn-control"
+                    >
+                      ▶ Resume
+                    </button>
+                    <button
+                      onClick={handleStop}
+                      disabled={!isPlaying}
+                      className="btn btn-stop"
+                    >
+                      ⏹ Stop
+                    </button>
+                  </div>
+
+                  <div className="playback-info">
+                    {isPlaying && <p>🔊 Playing...</p>}
+                    {!isPlaying && currentText && <p>⏸ Paused</p>}
+                  </div>
+                </>
+              )}
+            </main>
+          </div>
+
+          <footer className="footer">
+            <p>🎧 Shruti2030 • Open source • Offline-first • Privacy first</p>
+          </footer>
+        </div>
+      );
+    };
+
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<PDFAudioReader />);
+  </script>
+
+  <!-- Service Worker -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
-          .then(reg => {
-            console.log('✅ Service Worker registered:', reg);
-          })
-          .catch(err => {
-            console.log('Service Worker registration failed:', err);
-          });
+          .then(reg => console.log('✅ SW registered'))
+          .catch(err => console.log('SW error:', err));
       });
     }
-
-    // Add to home screen prompt
-    let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-    });
-  </script>
-
-  <!-- React App Initialization -->
-  <script type="text/babel">
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<PDFAudioReader />);
   </script>
 </body>
 </html>
