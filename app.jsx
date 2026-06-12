@@ -1,4 +1,3 @@
-// PDFAudioReader Component - Fixed for Browser Deployment
 const { useState, useEffect, useRef } = React;
 
 function PDFAudioReader() {
@@ -21,7 +20,6 @@ function PDFAudioReader() {
   const fileInputRef = useRef(null);
   const visualizationIntervalRef = useRef(null);
 
-  // Initialize Web Speech API
   useEffect(() => {
     synthRef.current = window.speechSynthesis;
     const synth = window.speechSynthesis;
@@ -30,7 +28,6 @@ function PDFAudioReader() {
     updateVoices();
   }, []);
 
-  // Dark mode effect
   useEffect(() => {
     localStorage.setItem('shruti_darkMode', darkMode);
     if (darkMode) {
@@ -40,7 +37,6 @@ function PDFAudioReader() {
     }
   }, [darkMode]);
 
-  // Mobile detection
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
@@ -49,7 +45,6 @@ function PDFAudioReader() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Visualization animation
   useEffect(() => {
     if (isPlaying) {
       visualizationIntervalRef.current = setInterval(() => {
@@ -70,7 +65,6 @@ function PDFAudioReader() {
     };
   }, [isPlaying]);
 
-  // Load PDF with PDF.js
   const handlePdfUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -87,7 +81,6 @@ function PDFAudioReader() {
         extractPages(pdf);
         setCurrentPage(0);
         
-        // Load saved progress
         const progress = JSON.parse(localStorage.getItem(`pdf_${file.name}`) || '{}');
         setSavedProgress(progress);
         if (progress.currentPage) {
@@ -120,7 +113,6 @@ function PDFAudioReader() {
     }
   };
 
-  // Text-to-Speech control
   const speak = (text) => {
     if (!synthRef.current) return;
     
@@ -211,7 +203,6 @@ function PDFAudioReader() {
     ),
 
     React.createElement('div', { className: 'main-grid' },
-      // Sidebar
       React.createElement('aside', { className: 'sidebar' },
         React.createElement('div', { className: 'sidebar-section' },
           React.createElement('h3', null, 'PDF Upload'),
@@ -289,7 +280,6 @@ function PDFAudioReader() {
         )
       ),
 
-      // Main Content
       React.createElement('main', { className: 'content' },
         !pages.length ? React.createElement('div', { className: 'empty-state' },
           React.createElement('div', { className: 'empty-icon' }, '📚'),
