@@ -13,8 +13,13 @@ export default function PDFAudioReader() {
   const [highlights, setHighlights] = useState(new Map());
   const [savedProgress, setSavedProgress] = useState({});
   const [pdfName, setPdfName] = useState('No PDF loaded');
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('shruti_darkMode') === 'true');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [visualization, setVisualization] = useState(Array(20).fill(0));
   const synthRef = useRef(null);
   const fileInputRef = useRef(null);
+  const visualizationIntervalRef = useRef(null);
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -24,6 +29,46 @@ export default function PDFAudioReader() {
     synth.onvoiceschanged = updateVoices;
     updateVoices();
   }, []);
+
+  // Dark mode effect
+  useEffect(() => {
+    localStorage.setItem('shruti_darkMode', darkMode);
+    if (darkMode) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  }, [darkMode]);
+
+  // Mobile detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Visualization animation
+  useEffect(() => {
+    if (isPlaying) {
+      visualizationIntervalRef.current = setInterval(() => {
+        setVisualization(prev => 
+          prev.map(() => Math.random() * 100)
+        );
+      }, 100);
+    } else {
+      if (visualizationIntervalRef.current) {
+        clearInterval(visualizationIntervalRef.current);
+      }
+      setVisualization(Array(20).fill(0));
+    }
+    return () => {
+      if (visualizationIntervalRef.current) {
+        clearInterval(visualizationIntervalRef.current);
+      }
+    };
+  }, [isPlaying]);
 
   // Load PDF with PDF.js
   const handlePdfUpload = async (e) => {
@@ -145,7 +190,16 @@ export default function PDFAudioReader() {
     <div className="app-container">
       <header className="header">
         <div className="header-content">
-          <h1>📖 SciReader</h1>
+          <div className="header-top">
+            <h1>🎧 Shruti2030</h1>
+            <button 
+              className="dark-mode-toggle"
+              onClick={() => setDarkMode(!darkMode)}
+              title={darkMode ? 'Light mode' : 'Dark mode'}
+            >
+              {darkMode ? '☀️' : '🌙'}
+            </button>
+          </div>
           <p className="tagline">PDF to Audio for Scientific Reading</p>
         </div>
       </header>
@@ -244,7 +298,23 @@ export default function PDFAudioReader() {
             <>
               <div className="page-header">
                 <h2>Page {currentPage + 1}</h2>
+                <div className="page-indicator">{currentPage + 1} / {pages.length}</div>
               </div>
+
+              {isPlaying && (
+                <div className="visualization-container">
+                  <div className="waveform">
+                    {visualization.map((height, idx) => (
+                      <div 
+                        key={idx} 
+                        className="bar"
+                        style={{ height: `${height}%` }}
+                      />
+                    ))}
+                  </div>
+                  <p className="reading-status">🔊 Reading aloud...</p>
+                </div>
+              )}
 
               <div className="text-display">
                 <p>{currentPageData?.text}</p>
