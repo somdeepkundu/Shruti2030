@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import './styles.css';
+// PDFAudioReader Component - Fixed for Browser Deployment
+const { useState, useEffect, useRef } = React;
 
-export default function PDFAudioReader() {
+function PDFAudioReader() {
   const [pdf, setPdf] = useState(null);
   const [pages, setPages] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
@@ -78,37 +78,46 @@ export default function PDFAudioReader() {
     setPdfName(file.name);
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const pdfjsLib = window.pdfjsLib;
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      
-      const pdf = await pdfjsLib.getDocument(new Uint8Array(event.target.result)).promise;
-      setPdf(pdf);
-      extractPages(pdf);
-      setCurrentPage(0);
-      
-      // Load saved progress
-      const progress = JSON.parse(localStorage.getItem(`pdf_${file.name}`) || '{}');
-      setSavedProgress(progress);
-      if (progress.currentPage) {
-        setCurrentPage(progress.currentPage);
+      try {
+        const pdfjsLib = window.pdfjsLib;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        const pdf = await pdfjsLib.getDocument(new Uint8Array(event.target.result)).promise;
+        setPdf(pdf);
+        extractPages(pdf);
+        setCurrentPage(0);
+        
+        // Load saved progress
+        const progress = JSON.parse(localStorage.getItem(`pdf_${file.name}`) || '{}');
+        setSavedProgress(progress);
+        if (progress.currentPage) {
+          setCurrentPage(progress.currentPage);
+        }
+      } catch (err) {
+        alert('Error loading PDF: ' + err.message);
+        console.error(err);
       }
     };
     reader.readAsArrayBuffer(file);
   };
 
   const extractPages = async (pdfDoc) => {
-    const extractedPages = [];
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      const page = await pdfDoc.getPage(i);
-      const text = await page.getTextContent();
-      const fullText = text.items.map(item => item.str).join(' ');
-      extractedPages.push({
-        number: i,
-        text: fullText.trim(),
-        content: text.items
-      });
+    try {
+      const extractedPages = [];
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const text = await page.getTextContent();
+        const fullText = text.items.map(item => item.str).join(' ');
+        extractedPages.push({
+          number: i,
+          text: fullText.trim(),
+          content: text.items
+        });
+      }
+      setPages(extractedPages);
+    } catch (err) {
+      console.error('Error extracting pages:', err);
     }
-    setPages(extractedPages);
   };
 
   // Text-to-Speech control
@@ -186,183 +195,162 @@ export default function PDFAudioReader() {
 
   const currentPageData = pages[currentPage];
 
-  return (
-    <div className="app-container">
-      <header className="header">
-        <div className="header-content">
-          <div className="header-top">
-            <h1>🎧 Shruti2030</h1>
-            <button 
-              className="dark-mode-toggle"
-              onClick={() => setDarkMode(!darkMode)}
-              title={darkMode ? 'Light mode' : 'Dark mode'}
-            >
-              {darkMode ? '☀️' : '🌙'}
-            </button>
-          </div>
-          <p className="tagline">PDF to Audio for Scientific Reading</p>
-        </div>
-      </header>
+  return React.createElement('div', { className: 'app-container' },
+    React.createElement('header', { className: 'header' },
+      React.createElement('div', { className: 'header-content' },
+        React.createElement('div', { className: 'header-top' },
+          React.createElement('h1', null, '🎧 Shruti2030'),
+          React.createElement('button', {
+            className: 'dark-mode-toggle',
+            onClick: () => setDarkMode(!darkMode),
+            title: darkMode ? 'Light mode' : 'Dark mode'
+          }, darkMode ? '☀️' : '🌙')
+        ),
+        React.createElement('p', { className: 'tagline' }, 'PDF to Audio for Scientific Reading')
+      )
+    ),
 
-      <div className="main-grid">
-        {/* Sidebar */}
-        <aside className="sidebar">
-          <div className="sidebar-section">
-            <h3>PDF Upload</h3>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handlePdfUpload}
-              className="file-input"
-            />
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="btn btn-primary"
-            >
-              Choose PDF
-            </button>
-            <p className="file-name">{pdfName}</p>
-          </div>
+    React.createElement('div', { className: 'main-grid' },
+      // Sidebar
+      React.createElement('aside', { className: 'sidebar' },
+        React.createElement('div', { className: 'sidebar-section' },
+          React.createElement('h3', null, 'PDF Upload'),
+          React.createElement('input', {
+            ref: fileInputRef,
+            type: 'file',
+            accept: '.pdf',
+            onChange: handlePdfUpload,
+            className: 'file-input'
+          }),
+          React.createElement('button', {
+            onClick: () => fileInputRef.current?.click(),
+            className: 'btn btn-primary'
+          }, 'Choose PDF'),
+          React.createElement('p', { className: 'file-name' }, pdfName)
+        ),
 
-          {pages.length > 0 && (
-            <>
-              <div className="sidebar-section">
-                <h3>Navigation</h3>
-                <div className="page-info">
-                  Page <strong>{currentPage + 1}</strong> of <strong>{pages.length}</strong>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max={pages.length}
-                  value={currentPage + 1}
-                  onChange={(e) => goToPage(parseInt(e.target.value))}
-                  className="page-slider"
-                />
-                <div className="button-group">
-                  <button onClick={prevPage} className="btn btn-small">← Prev</button>
-                  <button onClick={nextPage} className="btn btn-small">Next →</button>
-                </div>
-              </div>
+        pages.length > 0 && React.createElement(React.Fragment, null,
+          React.createElement('div', { className: 'sidebar-section' },
+            React.createElement('h3', null, 'Navigation'),
+            React.createElement('div', { className: 'page-info' },
+              'Page ',
+              React.createElement('strong', null, currentPage + 1),
+              ' of ',
+              React.createElement('strong', null, pages.length)
+            ),
+            React.createElement('input', {
+              type: 'range',
+              min: '1',
+              max: pages.length,
+              value: currentPage + 1,
+              onChange: (e) => goToPage(parseInt(e.target.value)),
+              className: 'page-slider'
+            }),
+            React.createElement('div', { className: 'button-group' },
+              React.createElement('button', { onClick: prevPage, className: 'btn btn-small' }, '← Prev'),
+              React.createElement('button', { onClick: nextPage, className: 'btn btn-small' }, 'Next →')
+            )
+          ),
 
-              <div className="sidebar-section">
-                <h3>Voice</h3>
-                <select
-                  value={selectedVoice}
-                  onChange={(e) => setSelectedVoice(parseInt(e.target.value))}
-                  className="voice-select"
-                >
-                  {voices.map((voice, idx) => (
-                    <option key={idx} value={idx}>
-                      {voice.name} ({voice.lang})
-                    </option>
-                  ))}
-                </select>
-              </div>
+          React.createElement('div', { className: 'sidebar-section' },
+            React.createElement('h3', null, 'Voice'),
+            React.createElement('select', {
+              value: selectedVoice,
+              onChange: (e) => setSelectedVoice(parseInt(e.target.value)),
+              className: 'voice-select'
+            },
+              voices.map((voice, idx) =>
+                React.createElement('option', { key: idx, value: idx },
+                  `${voice.name} (${voice.lang})`
+                )
+              )
+            )
+          ),
 
-              <div className="sidebar-section">
-                <h3>Speed</h3>
-                <div className="speed-control">
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={speed}
-                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                    className="speed-slider"
-                  />
-                  <span className="speed-value">{speed.toFixed(1)}x</span>
-                </div>
-              </div>
+          React.createElement('div', { className: 'sidebar-section' },
+            React.createElement('h3', null, 'Speed'),
+            React.createElement('div', { className: 'speed-control' },
+              React.createElement('input', {
+                type: 'range',
+                min: '0.5',
+                max: '2',
+                step: '0.1',
+                value: speed,
+                onChange: (e) => setSpeed(parseFloat(e.target.value)),
+                className: 'speed-slider'
+              }),
+              React.createElement('span', { className: 'speed-value' }, `${speed.toFixed(1)}x`)
+            )
+          ),
 
-              {savedProgress.timestamp && (
-                <div className="sidebar-section progress-info">
-                  <p>📍 Last read: {new Date(savedProgress.timestamp).toLocaleDateString()}</p>
-                </div>
-              )}
-            </>
-          )}
-        </aside>
+          savedProgress.timestamp && React.createElement('div', { className: 'sidebar-section progress-info' },
+            React.createElement('p', null, `📍 Last read: ${new Date(savedProgress.timestamp).toLocaleDateString()}`)
+          )
+        )
+      ),
 
-        {/* Main Content */}
-        <main className="content">
-          {!pages.length ? (
-            <div className="empty-state">
-              <div className="empty-icon">📚</div>
-              <h2>Ready to listen</h2>
-              <p>Upload a PDF to get started. SciReader will extract the text and read it aloud with natural voices.</p>
-            </div>
-          ) : (
-            <>
-              <div className="page-header">
-                <h2>Page {currentPage + 1}</h2>
-                <div className="page-indicator">{currentPage + 1} / {pages.length}</div>
-              </div>
+      // Main Content
+      React.createElement('main', { className: 'content' },
+        !pages.length ? React.createElement('div', { className: 'empty-state' },
+          React.createElement('div', { className: 'empty-icon' }, '📚'),
+          React.createElement('h2', null, 'Ready to listen'),
+          React.createElement('p', null, 'Upload a PDF to get started. Shruti2030 will extract the text and read it aloud with natural voices.')
+        ) : React.createElement(React.Fragment, null,
+          React.createElement('div', { className: 'page-header' },
+            React.createElement('h2', null, `Page ${currentPage + 1}`),
+            React.createElement('div', { className: 'page-indicator' }, `${currentPage + 1} / ${pages.length}`)
+          ),
 
-              {isPlaying && (
-                <div className="visualization-container">
-                  <div className="waveform">
-                    {visualization.map((height, idx) => (
-                      <div 
-                        key={idx} 
-                        className="bar"
-                        style={{ height: `${height}%` }}
-                      />
-                    ))}
-                  </div>
-                  <p className="reading-status">🔊 Reading aloud...</p>
-                </div>
-              )}
+          isPlaying && React.createElement('div', { className: 'visualization-container' },
+            React.createElement('div', { className: 'waveform' },
+              visualization.map((height, idx) =>
+                React.createElement('div', {
+                  key: idx,
+                  className: 'bar',
+                  style: { height: `${height}%` }
+                })
+              )
+            ),
+            React.createElement('p', { className: 'reading-status' }, '🔊 Reading aloud...')
+          ),
 
-              <div className="text-display">
-                <p>{currentPageData?.text}</p>
-              </div>
+          React.createElement('div', { className: 'text-display' },
+            React.createElement('p', null, currentPageData?.text)
+          ),
 
-              <div className="controls">
-                <button
-                  onClick={handlePlayPage}
-                  disabled={isPlaying}
-                  className="btn btn-play"
-                >
-                  ▶ Play Page
-                </button>
-                <button
-                  onClick={handlePause}
-                  disabled={!isPlaying}
-                  className="btn btn-control"
-                >
-                  ⏸ Pause
-                </button>
-                <button
-                  onClick={handleResume}
-                  disabled={!isPlaying}
-                  className="btn btn-control"
-                >
-                  ▶ Resume
-                </button>
-                <button
-                  onClick={handleStop}
-                  disabled={!isPlaying}
-                  className="btn btn-stop"
-                >
-                  ⏹ Stop
-                </button>
-              </div>
+          React.createElement('div', { className: 'controls' },
+            React.createElement('button', {
+              onClick: handlePlayPage,
+              disabled: isPlaying,
+              className: 'btn btn-play'
+            }, '▶ Play Page'),
+            React.createElement('button', {
+              onClick: handlePause,
+              disabled: !isPlaying,
+              className: 'btn btn-control'
+            }, '⏸ Pause'),
+            React.createElement('button', {
+              onClick: handleResume,
+              disabled: !isPlaying,
+              className: 'btn btn-control'
+            }, '▶ Resume'),
+            React.createElement('button', {
+              onClick: handleStop,
+              disabled: !isPlaying,
+              className: 'btn btn-stop'
+            }, '⏹ Stop')
+          ),
 
-              <div className="playback-info">
-                {isPlaying && <p>🔊 Playing...</p>}
-                {!isPlaying && currentText && <p>⏸ Paused</p>}
-              </div>
-            </>
-          )}
-        </main>
-      </div>
+          React.createElement('div', { className: 'playback-info' },
+            isPlaying ? React.createElement('p', null, '🔊 Playing...') : null,
+            !isPlaying && currentText ? React.createElement('p', null, '⏸ Paused') : null
+          )
+        )
+      )
+    ),
 
-      <footer className="footer">
-        <p>Open source • Works offline • Privacy first</p>
-      </footer>
-    </div>
+    React.createElement('footer', { className: 'footer' },
+      React.createElement('p', null, 'Open source • Works offline • Privacy first')
+    )
   );
 }

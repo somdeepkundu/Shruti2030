@@ -8,15 +8,11 @@
   <meta name="author" content="SciReader Contributors">
   
   <!-- PWA Manifest -->
-  <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%231a3a52' width='180' height='180'/><text x='50%' y='50%' font-size='80' font-weight='bold' fill='white' text-anchor='middle' dy='.3em'>📖</text></svg>">
+  <link rel="manifest" href="/shruti2030/manifest.json">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%231a3a52' width='180' height='180'/><text x='50%' y='50%' font-size='80' font-weight='bold' fill='white' text-anchor='middle' dy='.3em'>🎧</text></svg>">
   
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="styles.css">
-  
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="/shruti2030/styles.css">
   
   <title>Shruti2030 - PDF to Audio</title>
   
@@ -41,6 +37,27 @@
       display: block;
       font-size: 3rem;
       margin-bottom: 1rem;
+      animation: bounce 1s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .error-message {
+      background: #e74c3c;
+      color: white;
+      padding: 1rem;
+      border-radius: 4px;
+      max-width: 500px;
+      font-size: 0.9rem;
+      margin-top: 1rem;
+      display: none;
+    }
+
+    .error-message.show {
+      display: block;
     }
   </style>
 </head>
@@ -49,6 +66,7 @@
     <div class="loading-text">
       <span class="icon">🎧</span>
       <p>Loading Shruti2030...</p>
+      <div class="error-message" id="errorMsg"></div>
     </div>
   </div>
 
@@ -62,19 +80,16 @@
   <!-- Babel for JSX transformation -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- App -->
-  <script type="text/babel" src="app.jsx"></script>
-  
   <!-- Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('/shruti2030/sw.js')
           .then(reg => {
-            console.log('Service Worker registered:', reg);
+            console.log('✅ Service Worker registered:', reg);
           })
           .catch(err => {
-            console.log('Service Worker registration failed:', err);
+            console.log('⚠️ Service Worker registration failed:', err);
           });
       });
     }
@@ -85,12 +100,44 @@
       e.preventDefault();
       deferredPrompt = e;
     });
+
+    // Error handling
+    window.addEventListener('error', (event) => {
+      console.error('❌ Error:', event.error);
+      const errorDiv = document.getElementById('errorMsg');
+      if (errorDiv) {
+        errorDiv.textContent = 'Error: ' + event.error?.message || 'Unknown error occurred';
+        errorDiv.classList.add('show');
+      }
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('❌ Unhandled rejection:', event.reason);
+      const errorDiv = document.getElementById('errorMsg');
+      if (errorDiv) {
+        errorDiv.textContent = 'Error: ' + (event.reason?.message || event.reason || 'Unknown error');
+        errorDiv.classList.add('show');
+      }
+    });
   </script>
 
+  <!-- App -->
+  <script type="text/babel" src="/shruti2030/app.jsx"></script>
+  
   <!-- React App Initialization -->
   <script type="text/babel">
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<PDFAudioReader />);
+    try {
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(PDFAudioReader));
+      console.log('✅ App rendered successfully');
+    } catch (err) {
+      console.error('❌ Failed to render app:', err);
+      const errorDiv = document.getElementById('errorMsg');
+      if (errorDiv) {
+        errorDiv.textContent = 'Failed to load app: ' + err.message;
+        errorDiv.classList.add('show');
+      }
+    }
   </script>
 </body>
 </html>
