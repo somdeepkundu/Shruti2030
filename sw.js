@@ -12,7 +12,6 @@ const urlsToCache = [
   'https://unpkg.com/@babel/standalone/babel.min.js'
 ];
 
-// Install event - cache files
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -23,7 +22,6 @@ self.addEventListener('install', event => {
   );
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -38,9 +36,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', event => {
-  // Skip non-GET requests
   if (event.request.method !== 'GET') {
     return;
   }
@@ -48,22 +44,18 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Return cached version if available
         if (response) {
           return response;
         }
 
         return fetch(event.request)
           .then(response => {
-            // Don't cache non-successful responses
             if (!response || response.status !== 200 || response.type === 'error') {
               return response;
             }
 
-            // Clone the response
             const responseToCache = response.clone();
 
-            // Cache successful responses
             if (event.request.method === 'GET' && 
                 (event.request.url.includes(self.location.origin) || 
                  event.request.url.includes('cdnjs') || 
@@ -77,7 +69,6 @@ self.addEventListener('fetch', event => {
             return response;
           })
           .catch(() => {
-            // Offline fallback
             if (event.request.destination === 'document') {
               return caches.match('/index.html');
             }
